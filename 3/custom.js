@@ -8,7 +8,7 @@ function next_page(url){
   window.open(url, "_self");
 }
 
-function get_priors() {
+function get_priors(condition) {
   container = document.querySelectorAll('.r2d3');
   str_alpha = container[0].shadowRoot.querySelector(".text-eff-prior").innerHTML;
   prior_alpha = str_alpha.split(" ")[2];
@@ -19,9 +19,7 @@ function get_priors() {
   var t1 = urlParams.get('t1');
   var t2 = TimeMe.getTimeOnCurrentPageInSeconds();
   
-  console.log(t1, t2);
-  
-  url = 'https://umich.qualtrics.com/jfe/form/SV_ebP6FaVE8j2JzZH?alpha='+prior_alpha+'&beta='+prior_beta+'&t1='+t1+'&t2='+t2 ;
+  url = 'https://umich.qualtrics.com/jfe/form/SV_ebP6FaVE8j2JzZH?cond='+condition+'&alpha='+prior_alpha+'&beta='+prior_beta+'&t1='+t1+'&t2='+t2 ;
   
   window.open(url, "_blank");
 }
