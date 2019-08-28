@@ -223,6 +223,8 @@ priors %>%
 
 ## Calculating the prior predictive density
 
+### Approach 1: calculating the prior predictive distribution by integrating the prior and the likelihood
+
 $$
 \begin{aligned}
 f(k; \mu, \sigma | control) & = \int{ f_{poisson(\lambda)}(k).f_{control}(\lambda)d\lambda } \\
@@ -230,7 +232,6 @@ f(k; \mu, \sigma | control) & = \int{ f_{poisson(\lambda)}(k).f_{control}(\lambd
 & = \frac{1}{k!\sigma\sqrt{2\pi}}\int{ \lambda^{(k-1)} exp(-\lambda) exp( - \frac{(ln \lambda - \mu)^2}{2\sigma^2} }) d\lambda \\
 \end{aligned}
 $$
-
 
 ```{r}
 integrand_control <- function(x, mu, sigma, k) {
@@ -245,13 +246,29 @@ prior_predictive_density.control <- priors %>%
   ) %>%
   unnest(k) %>%
   mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate( integrand_control, lower = 0, upper = 200, mu = ..1, sigma = ..2, k = ..3)$value )
+    density = pmap_dbl( list(mu, sigma, k), ~integrate( integrand_control, lower = 0, upper = 128, mu = ..1, sigma = ..2, k = ..3)$value )
   )
 
 prior_predictive_density.control %>%
   select(-k) %>%
   group_by( ResponseId, mu, sigma, parameter, dist ) %>%
   summarise( density = sum(density) )
+```
+
+### Approach 2: calculating the prior predictive distribution by simulating from the prior distributions
+
+```{r}
+priors %>%
+  filter( parameter == "alpha" & dist == "normal" ) %>%
+  drop_na() %>%
+  mutate( lambda = map2(mu, sigma, ~ exp(rnorm(1000, .x, .y))) ) %>%
+  unnest( lambda ) %>%
+  mutate( 
+    k = list(seq(0, 128, by = 1)),
+    density = map2_dbl( lambda, k, ~ sum(dpois(.y, .x)) )
+  ) %>%
+  group_by( ResponseId, mu, sigma, parameter, dist ) %>%
+  summarise( density = mean(density) )
 ```
 
 
