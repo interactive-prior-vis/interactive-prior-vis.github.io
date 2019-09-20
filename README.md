@@ -1,7 +1,6 @@
-# Survey of interactive visualizations for prior setting in Bayesian Analysis
+# Prior Setting In Practice: Strategies and rationales used inchoosing prior distributions for Bayesian analysis
 
-Please click [here](https://umich.qualtrics.com/jfe/form/SV_0TKxuIhcZDBYj2Z) to proceed to the survey.
 
-Alternatively, you can paste this link into the browser: <https://umich.qualtrics.com/jfe/form/SV_0TKxuIhcZDBYj2Z>
+This github repository contains supplementary materials for the CHI 2020 submission, *Prior Setting In Practice: Strategies and rationales used inchoosing prior distributions for Bayesian analysis*
 
-If you have any questions, please contact Abhraneel (email: abhsarma@umich.edu)
+This repository is intended for use by reviewers of the paper only.
