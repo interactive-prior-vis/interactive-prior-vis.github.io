@@ -1,5 +1,5 @@
 ---
-title: "Prior setting data analysis"
+title: "Preliminary analysis and comparison of elicited prior distributions across conditions"
 author: ""
 date: "8/19/2019"
 output: html_document
@@ -20,8 +20,10 @@ theme_update(
 )
 ```
 
+In this document we perform some descriptive analysis of the priors chosen by participants and compare them across different conditions.
 
-## Clean the data
+## Data
+First, we load the data downlaoded from qualtrics (this file is not shared as it contains identifiable information) and remove all the identifiers. We then save this deidentified file.
 
 ```{r data-clean, eval = FALSE}
 data.raw = read_csv( file = "data/prior-setting-study.csv", 
@@ -54,6 +56,7 @@ data.raw %>%
 ```
 
 ## Load the data
+We load the data and add the codes from the open code generation process.
 
 ```{r data}
 data = read_csv( file = "data/prior-setting-study-deidentified.csv", 
@@ -67,8 +70,14 @@ data %<>% mutate(
   IP_alpha = c(NA, NA, FALSE, FALSE, TRUE, FALSE, TRUE, NA, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, NA, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, NA, NA, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, NA, FALSE, FALSE, TRUE, FALSE, NA, FALSE, NA, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, TRUE, NA, FALSE, FALSE, NA, FALSE, FALSE, NA),
   
   IP_beta = c(NA, NA, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NA, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NA, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NA, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, NA, NA, NA, FALSE, FALSE, FALSE)
-)
+) %>%
+  drop_na( condition )
+
+data %>%
+  write.csv( file = "data/prior-setting-study-deidentified-2.csv", row.names = FALSE )
 ```
+
+## Analysis
 
 Check the number of responses in each condition
 
@@ -95,22 +104,22 @@ data %>%
 
 ### Experise
 
-```{r}
-data %>%
-  mutate(`Knowledge stats` = factor(`Knowledge stats`, levels = c("Not knowledgeable at all", "Slightly knowledgeable", "Moderately knowledgeable", "Very knowledgeable", "Extremely knowledgeable") )) %>%
-  ggplot() +
-  geom_bar(aes(`Knowledge stats`)) + 
-  scale_x_discrete( drop=FALSE, labels = function(x) sub(" "," \n", x, fixed=TRUE) )
-```
+Visualize the responses to liker items
 
 ```{r}
-data %>%
-  mutate(`Knowledge Bayesian` = factor(`Knowledge Bayesian`, levels = c("Not knowledgeable at all", "Slightly knowledgeable", "Moderately knowledgeable", "Very knowledgeable", "Extremely knowledgeable") )) %>%
+data  %>%
+  gather( domain, knowledge_level, c(`Knowledge stats`, `Knowledge Bayesian`, `Knowledge software`)) %>%
+  mutate(
+    `knowledge_level` = factor(`knowledge_level`, levels = c("Not knowledgeable at all", "Slightly knowledgeable", "Moderately knowledgeable", "Very knowledgeable", "Extremely knowledgeable") )
+  ) %>%
   ggplot() +
-  geom_bar(aes(`Knowledge Bayesian`)) + 
-  scale_x_discrete( labels = function(x) sub(" "," \n", x, fixed=TRUE) )
+  geom_bar(aes( knowledge_level )) + 
+  scale_x_discrete( drop=FALSE, labels = function(x) sub(" "," \n", x, fixed=TRUE) ) +
+  facet_grid(domain ~ .)
 ```
 
+### Comparing the prior distributions
+We first create a prior data frame which we will use to create visualizations of the prior density on the parameter scale, response scale and prior predictive density.
 
 ```{r}
 priors <- data %>%
@@ -146,6 +155,8 @@ get_density_response <- function( dist, mu, sigma, grid) {
 }
 ```
 
+1. Probability density of priors on the intercept
+
 ```{r, priors-intercept, fig.height = 4, fig.width = 12}
 priors.dens.alpha <- priors %>% 
   filter( parameter == "alpha" ) %>%
@@ -160,11 +171,12 @@ priors.dens.alpha %>%
   facet_wrap( ~ condition)
 ```
 
+2. Probability density of priors on the intercept transformed to the response scale
 
-```{r, priors-intercept-response, fig.height = 6, fig.width = 12}
+```{r, priors-intercept-response, fig.height = 4, fig.width = 12}
 priors.dens_response.alpha <- priors %>% 
-  filter( parameter == "alpha" ) %>%
-  mutate( grid = list(seq(0.5, 200, by = 0.5)) ) %>%
+  filter( parameter == "alpha" ) %>% 
+  mutate( grid = list(seq(0.5, 140, by = 0.5)) ) %>%
   mutate( density = pmap(list(dist, mu, sigma, grid), ~ get_density_response(..1, ..2, ..3, ..4)) ) %>%
   unnest( grid, density, .drop = FALSE)
   
@@ -173,14 +185,17 @@ df.interval = tibble( x = c(24.6, 44.1), y = range(priors.dens_response.alpha$de
   mutate( axis = c("x.lower", "x.upper", "y.lower", "y.upper")) %>%
   spread( axis, value)
 
-priors.dens_response.alpha %>%
+p1 <- priors.dens_response.alpha %>%
   unnest( grid, density, .drop = FALSE) %>%
   ggplot() +
-  geom_rect( data = df.interval, aes(xmin = x.lower, xmax = x.upper, ymin = y.lower, ymax = y.upper), fill = "grey50", alpha = 0.3 ) +
+  geom_vline( xintercept = 128 ) +
+  # geom_rect( data = df.interval, aes(xmin = x.lower, xmax = x.upper, ymin = y.lower, ymax = y.upper), fill = "grey50", alpha = 0.3 ) +
   geom_line(aes( x = grid, y = density, color = dist, group = ResponseId), alpha = 0.7) +
-  facet_grid(condition ~ .)
+  scale_x_continuous( breaks = seq(0, 128, by = 16) ) +
+  facet_grid( . ~ condition)
 ```
 
+3. Histograms of the value of the location parameter of the priors set by participants in the different conditions
 
 ```{r, priors-intercept-mean-hist, fig.height = 4, fig.width = 12}
 priors %>% 
@@ -188,9 +203,11 @@ priors %>%
   ggplot() +
   geom_vline( xintercept = log(35), alpha = 0.5 ) +
   geom_histogram(aes( x = mu), color = "#ffffff", binwidth = 0.1) +
+  scale_y_continuous( breaks = seq(0, 8, by = 2) ) +
   facet_wrap( ~ condition)
 ```
 
+4. Histograms of the value of the scale parameter of the priors set by participants in the different conditions
 
 ```{r, priors-intercept-sd-hist, fig.height = 4, fig.width = 12}
 priors %>% 
@@ -200,6 +217,7 @@ priors %>%
   facet_wrap( ~ condition)
 ```
 
+5. Probability density of the priors on the mean difference parameter, on the parameter scale
 
 ```{r, priors-meandiff, fig.height = 4, fig.width = 12}
 priors.dens.beta <- priors %>% 
@@ -211,13 +229,16 @@ priors.dens.beta %>%
   unnest( grid, density, .drop = FALSE) %>%
   ggplot() +
   geom_vline( xintercept = 0, alpha = 0.5 ) +
-  geom_line(aes( x = grid, y = density, color = dist, group = ResponseId), alpha = 0.7) +
+  geom_line(aes( x = grid, y = density, color = dist, group = ResponseId), alpha = 0.7, size = 1.25) +
   facet_wrap( ~ condition)
 ```
 
+
+5. Probability density of the priors on the mean difference parameter, on the multiplicative scale
+
 ```{r, priors-meandiff-response, fig.height = 4, fig.width = 12}
 priors.dens.beta <- priors %>% 
-  filter( parameter == "beta" & IP_beta == TRUE ) %>%
+  filter( parameter == "beta") %>%
   mutate( grid = list(seq(-2.5, 2.5, by = 0.01)) ) %>%
   mutate( density = pmap(list(dist, mu, sigma, grid), ~ get_density(..1, ..2, ..3, ..4)) )
 
@@ -225,26 +246,12 @@ priors.dens.beta %>%
   unnest( grid, density, .drop = FALSE) %>%
   ggplot() +
   geom_vline( xintercept = 0, alpha = 0.5 ) +
-  geom_line(aes( x = grid, y = density, color = dist, group = ResponseId), alpha = 0.3, size = 2) +
-  scale_x_continuous( breaks = log(c(0.1, 0.2, 0.4, 0.7, 1, 1.4, 2, 3, 5, 8)), labels = function(x) round(exp(x), 2) )
+  geom_line(aes( x = grid, y = density, color = dist, group = ResponseId), alpha = 0.3, size = 1.25) +
+  scale_x_continuous( breaks = log(c(0.1, 0.2, 0.4, 0.7, 1, 1.4, 2, 3, 5, 8)), labels = function(x) round(exp(x), 2) ) +
+  facet_wrap( ~ condition)
 ```
 
-
-```{r, priors-meandiff-response, fig.height = 4, fig.width = 12}
-priors.dens.beta <- priors %>% 
-  filter( parameter == "beta" & WIP_beta == TRUE ) %>%
-  mutate( grid = list(seq(-2.5, 2.5, by = 0.01)) ) %>%
-  mutate( density = pmap(list(dist, mu, sigma, grid), ~ get_density(..1, ..2, ..3, ..4)) )
-
-priors.dens.beta %>%
-  unnest( grid, density, .drop = FALSE) %>%
-  ggplot() +
-  geom_vline( xintercept = 0, alpha = 0.5 ) +
-  geom_line(aes( x = grid, y = density, color = dist, group = ResponseId), alpha = 0.7) +
-  scale_x_continuous( breaks = log(c(0.1, 0.2, 0.4, 0.7, 1, 1.4, 2, 3, 5, 8)), labels = function(x) round(exp(x), 2) )
-```
-
-
+6. Histogram of the values of the location parameter set for priors on the mean difference parameters
 
 ```{r, priors-meandiff-mean-hist, fig.height = 4, fig.width = 12}
 priors %>% 
@@ -255,6 +262,7 @@ priors %>%
   facet_wrap( ~ condition)
 ```
 
+7. Histogram of the values of the scale parameter set for the priors on the mean difference parameter
 
 ```{r, priors-meandiff-sd-hist, fig.height = 4, fig.width = 12}
 priors %>% 
@@ -262,192 +270,6 @@ priors %>%
   ggplot() +
   geom_histogram(aes( x = sigma, group = ResponseId), alpha = 0.7, binwidth = 0.1) +
   facet_wrap( ~ condition)
-```
-
-
-
-## Calculating the prior predictive density
-
-### Calculating the prior predictive distribution by integrating the prior and the likelihood
-
-$$
-\begin{aligned}
-f(k; \mu, \sigma | alpha) & = \int{ f_{poisson(\lambda)}(k).f_{alpha}(\lambda)d\lambda } \\
-& = \int{ \frac{\lambda^k}{k!} exp(-\lambda) \frac{1}{\lambda\sigma\sqrt{2\pi}}exp( - \frac{(ln \lambda - \mu)^2}{2\sigma^2} } d\lambda \\
-& = \frac{1}{k!\sigma\sqrt{2\pi}}\int{ \lambda^{(k-1)} exp(-\lambda) exp( - \frac{(ln \lambda - \mu)^2}{2\sigma^2} }) d\lambda \\
-\end{aligned}
-$$
-
-
-
-```{r}
-integrand_alpha_normal <- function(x, mu, sigma, k) {
-  (exp( k*log(x) - x ) / factorial(k)) * dnorm( log(x), mu, sigma) * abs(1/x)
-}
-
-#gen.Family("TF")
-integrand_alpha_student_t <- function(x, mu, sigma, k, nu = 3) {
-  (exp( k*log(x) - x ) / factorial(k)) * gamlss.dist::dTF( log(x) , mu, sigma, nu) * abs(1/x)
-}
-
-```
-
-
-
-```{r, eval = FALSE}
-ppd.alpha.normal <- priors %>%
-  filter( parameter == "alpha" & dist == "normal" ) %>%
-  drop_na() %>%
-  mutate( 
-    k = list(seq(0, 128, by = 1))
-  ) %>%
-  unnest(k) %>%
-  mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate( integrand_alpha_normal, lower = 0, upper = Inf, mu = ..1, sigma = ..2, k = ..3, rel.tol = 1e-15)$value )
-  )
-
-ppd.alpha.student_t <- priors %>%
-  filter( parameter == "alpha" & dist == "student_t" )  %>%
-  mutate( 
-    k = list(seq(0, 128, by = 1))
-  ) %>%
-  unnest(k) %>%
-  mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate( integrand_alpha_student_t, lower = 0, upper = Inf, mu = ..1, sigma = ..2, k = ..3)$value)
-  )
-
-ppd.alpha <- rbind(ppd.alpha.normal, ppd.alpha.student_t)
-```
-
-```{r}
-ppd.alpha.student_t %>%
-  filter( mu == 3.92 )
-```
-
-
-
-```{r}
-ppd.alpha %>%
-  select(-k) %>%
-  group_by( ResponseId, mu, sigma, parameter, dist, condition ) %>%
-  summarise( density = sum(density) ) %>%
-  mutate( density_out_range = 1-density ) %>%
-  ggplot() +
-  geom_histogram(aes(density_out_range), binwidth = 0.05) +
-  facet_grid( dist ~ condition )
-```
-
-```{r wip_ppd_analysis , eval = FALSE}
-ppd.alpha.wip <- ppd.alpha %>% filter( WIP_alpha == TRUE )
-
-ppd.alpha.wip %>%
-  select(-k) %>%
-  group_by( ResponseId, mu, sigma, parameter, dist, condition, WIP_alpha ) %>%
-  summarise( density = sum(density) ) %>%
-  ggplot() +
-  geom_histogram(aes(density), color = "#ffffff", breaks = seq(0.5, 1, 0.05)) +
-  facet_wrap( ~ WIP_alpha )
-```
-
-
-```{r}
-ppd.alpha.wip  %>%
-  filter(dist == "student_t") %>%
-  mutate( prior = pmap_chr(list(mu, sigma, dist), ~paste0(..3, "( ", ..1, ", ", ..2, " )" )) ) %>%
-  group_by( ResponseId, mu, sigma, parameter, dist, condition, WIP_alpha ) %>%
-  ggplot() +
-  geom_line(aes(k, density, group = index, color = prior))
-```
-
-
-```{r ip_ppd_analysis , eval = FALSE}
-ppd.normal.ip <- priors %>%
-  filter( IP_alpha == TRUE ) %>%
-  filter( parameter == "alpha" & dist == "normal" ) %>%
-  mutate( 
-    k = list(seq(24, 45, by = 1))
-  ) %>%
-  unnest(k) %>%
-  mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate( integrand_control_normal, lower = 0, upper = Inf, mu = ..1, sigma = ..2, k = ..3, rel.tol = 1e-15)$value )
-  )
-
-ppd.student_t.ip <- priors %>%
-  filter( IP_alpha == TRUE ) %>%
-  filter( parameter == "alpha" & dist == "student_t" )  %>%
-  mutate( 
-    k = list(seq(24, 45, by = 1))
-  ) %>%
-  unnest(k) %>%
-  mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate( integrand_control_student_t, lower = 0, upper = Inf, mu = ..1, sigma = ..2, k = ..3)$value)
-  )
-
-ppd.alpha.ip <- rbind(ppd.normal.ip, ppd.student_t.ip)
-
-ppd.alpha.ip %>%
-  select(-k) %>%
-  group_by( ResponseId, mu, sigma, parameter, dist, condition ) %>%
-  summarise( density = sum(density) ) %>%
-  ggplot() +
-  geom_histogram(aes(density), color = "#ffffff", breaks = seq(0.2, 0.8, 0.05))
-```
-
-
-```{r}
-prior_predictive_density.mean.control.normal <- priors %>%
-  filter( parameter == "alpha" & dist == "normal" ) %>%
-  drop_na() %>%
-  mutate( 
-    k = list(seq(23, 45, by = 1))
-  ) %>%
-  unnest(k) %>%
-  mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate(integrand_control_normal, lower = 0, upper = Inf, mu = ..1, sigma = ..2, k = ..3, rel.tol = 1e-15)$value )
-  )
-
-prior_predictive_density.mean.control.student_t <- priors %>%
-  filter( parameter == "alpha" & dist == "student_t" )  %>%
-  mutate( 
-    k = list(seq(24, 45, by = 1))
-  ) %>%
-  unnest(k) %>%
-  mutate(
-    density = pmap_dbl( list(mu, sigma, k), ~integrate(integrand_control_student_t, lower = 0, upper = Inf, mu = ..1, sigma = ..2, k = ..3)$value)
-  )
-
-prior_predictive_density.mean.control <- rbind(prior_predictive_density.mean.control.normal, prior_predictive_density.mean.control.student_t)
-```
-
-
-```{r}
-prior_predictive_density.mean.control %>%
-  select(-k) %>%
-  group_by( ResponseId, mu, sigma, parameter, dist, condition ) %>%
-  summarise( density = sum(density) ) %>%
-  ggplot() +
-  geom_histogram(aes(density), binwidth = 0.05) +
-  facet_grid( dist ~ condition )
-```
-
-
-
-
-### Calculating the prior predictive distribution by simulating from the prior distributions
-A sanity check
-
-```{r}
-priors %>%
-  filter( parameter == "alpha" & dist == "normal" ) %>%
-  drop_na() %>%
-  mutate( lambda = map2(mu, sigma, ~ exp(rnorm(1000, .x, .y))) ) %>%
-  unnest( lambda ) %>%
-  mutate( 
-    k = list(seq(0, 128, by = 1)),
-    density = map2_dbl( lambda, k, ~ sum(dpois(.y, .x)) )
-  ) %>%
-  group_by( ResponseId, mu, sigma, parameter, dist ) %>%
-  summarise( density = mean(density) )
 ```
 
 
